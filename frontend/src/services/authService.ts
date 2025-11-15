@@ -1,0 +1,157 @@
+/**
+ * Authentication Service
+ * API calls for login, OTP verification, etc.
+ */
+
+import api from "./api";
+import { LoginResponse, OtpVerifyResponse, RefreshTokenResponse } from "../types/auth";
+import { persistentLogger } from "../utils/persistentLogger";
+
+export const authService = {
+  /**
+   * Login with email and password
+   */
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    try {
+      persistentLogger.log("authService", "login() called with:", { email });
+      persistentLogger.log("authService", "About to POST to /auth/login");
+      console.log("[authService] login() called with:", { email });
+      console.log("[authService] About to POST to /auth/login");
+      const response = await api.post<LoginResponse>("/auth/login", {
+        email,
+        password,
+      });
+      persistentLogger.log("authService", "Login response received:", response.data);
+      console.log("[authService] Login response received:", response.data);
+      return response.data;
+    } catch (error: any) {
+      persistentLogger.error("authService", "Login error caught:", error);
+      console.error("[authService] Login error caught:", error);
+      console.error("[authService] Error response:", error.response?.data);
+      console.error("[authService] Error message:", error.message);
+
+      // Extract proper error message from response
+      const errorMessage = error.response?.data?.message || error.message || "Login failed";
+      persistentLogger.error("authService", "Throwing error with message:", errorMessage);
+
+      const errorObj = new Error(errorMessage);
+      (errorObj as any).response = error.response?.data;
+      throw errorObj;
+    }
+  },
+
+  /**
+   * Verify OTP
+   */
+  verifyOtp: async (otp: string): Promise<OtpVerifyResponse> => {
+    try {
+      // Attach temporary token (from login) for OTP verification
+      const tempToken = localStorage.getItem("tempToken");
+      const config = tempToken ? { headers: { Authorization: `Bearer ${tempToken}` } } : {};
+
+      const response = await api.post<OtpVerifyResponse>("/auth/verify-otp", { otp }, config);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "OTP verification failed";
+      const errorObj = new Error(errorMessage);
+      (errorObj as any).response = error.response?.data;
+      throw errorObj;
+    }
+  },
+
+  /**
+   * Resend OTP
+   */
+  resendOtp: async () => {
+    try {
+      // Resend requires the temporary token in Authorization header
+      const tempToken = localStorage.getItem("tempToken");
+      const config = tempToken ? { headers: { Authorization: `Bearer ${tempToken}` } } : {};
+
+      const response = await api.post("/auth/resend-otp", {}, config);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Failed to resend OTP";
+      const errorObj = new Error(errorMessage);
+      (errorObj as any).response = error.response?.data;
+      throw errorObj;
+    }
+  },
+
+  /**
+   * Refresh token
+   */
+  refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
+    try {
+      const response = await api.post<RefreshTokenResponse>("/auth/refresh-token", {
+        refreshToken,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Token refresh failed";
+      const errorObj = new Error(errorMessage);
+      (errorObj as any).response = error.response?.data;
+      throw errorObj;
+    }
+  },
+
+  /**
+   * Logout
+   */
+  logout: async (refreshToken: string) => {
+    try {
+      const response = await api.post("/auth/logout", {
+        refreshToken,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Logout failed";
+      const errorObj = new Error(errorMessage);
+      (errorObj as any).response = error.response?.data;
+      throw errorObj;
+    }
+  },
+
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated: (): boolean => {
+    return !!localStorage.getItem("accessToken");
+  },
+
+  /**
+   * Get stored tokens
+   */
+  getTokens: () => ({
+    accessToken: localStorage.getItem("accessToken"),
+    refreshToken: localStorage.getItem("refreshToken"),
+    tempToken: localStorage.getItem("tempToken"),
+  }),
+
+  /**
+   * Store tokens
+   */
+  storeTokens: (accessToken: string, refreshToken: string) => {
+    localStorage.setItem("accessToken", accessToken);
+    localStorage.setItem("refreshToken", refreshToken);
+  },
+
+  /**
+   * Store temp token (for OTP verification)
+   */
+  storeTempToken: (tempToken: string) => {
+    localStorage.setItem("tempToken", tempToken);
+  },
+
+  /**
+   * Clear all tokens
+   */
+  clearTokens: () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("tempToken");
+    localStorage.removeItem("hospital");
+  },
+};
+
+export default authService;
