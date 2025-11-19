@@ -1,27 +1,63 @@
 /**
  * Patient Controller
- * Handles patient-related API requests
+ * Handles all patient-related operations
  */
 
 import * as patientService from "../services/patient.service.js";
 import * as r2Service from "../services/r2.service.js";
-import archiver from "archiver";
-import PDFDocument from "pdfkit";
+import * as pdfService from "../services/pdf.service.js";
+import * as zipService from "../services/zip.service.js";
+
+/**
+ * POST /api/patients
+ * Create new patient with auto-generated folders
+ */
+export const createPatient = async (req, res) => {
+  try {
+    const hospitalId = req.hospital?._id;
+    const { patientName, email, phone, dateOfBirth, medicalRecordNumber, notes } = req.body;
+
+    console.log("[Patient Controller] Creating patient:", patientName);
+
+    const patient = await patientService.createPatient({
+      hospitalId,
+      patientName,
+      email,
+      phone,
+      dateOfBirth,
+      medicalRecordNumber,
+      notes,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: patient,
+      message: "Patient created successfully",
+    });
+  } catch (error) {
+    console.error("[Patient Controller] Create error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 /**
  * GET /api/patients
- * Get all patients for logged-in hospital
+ * Get all patients for logged-in hospital with pagination and search
  */
 export const getPatients = async (req, res) => {
   try {
     const hospitalId = req.hospital?._id;
-    const { limit = 20, skip = 0 } = req.query;
+    const { limit = 20, skip = 0, search } = req.query;
 
-    console.log("[Patient Controller] Fetching patients for hospital:", hospitalId);
+    console.log("[Patient Controller] Fetching patients for hospital:", hospitalId, "Search:", search);
 
     const { patients, total } = await patientService.getPatients(hospitalId, {
       limit: parseInt(limit),
       skip: parseInt(skip),
+      search,
     });
 
     return res.status(200).json({
@@ -95,6 +131,53 @@ export const getFolderFiles = async (req, res) => {
 };
 
 /**
+ * POST /api/patients/:patientId/files/:folderName
+ * Upload file to patient folder
+ */
+export const uploadFile = async (req, res) => {
+  try {
+    const { patientId, folderName } = req.params;
+    const hospitalId = req.hospital?._id;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded",
+      });
+    }
+
+    console.log("[Patient Controller] Uploading file to folder:", folderName);
+
+    // Generate R2 key: hospitalId/patientId/folderName/filename
+    const key = `${hospitalId}/${patientId}/${folderName}/${Date.now()}_${file.originalname}`;
+
+    // Upload to R2
+    const uploadResult = await r2Service.uploadFile(file.buffer, key, file.mimetype);
+
+    // Update patient record
+    const patient = await patientService.addFileToFolder(hospitalId, patientId, folderName, {
+      fileName: file.originalname,
+      fileUrl: uploadResult.key,
+      size: file.size,
+      mimeType: file.mimetype,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: patient,
+      message: "File uploaded successfully",
+    });
+  } catch (error) {
+    console.error("[Patient Controller] Upload error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/**
  * GET /api/patients/:patientId/download/pdf
  * Download all files as PDF
  */
@@ -106,45 +189,15 @@ export const downloadAllPdf = async (req, res) => {
     console.log("[Patient Controller] Generating PDF for patient:", patientId);
 
     const patient = await patientService.getPatientById(hospitalId, patientId);
-
-    // Create PDF document
-    const doc = new PDFDocument();
-    const filename = `${patient.patientName}_records.pdf`;
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
-    doc.pipe(res);
-
-    // Add title
-    doc.fontSize(20).text(`Patient Records: ${patient.patientName}`, { align: "center" });
-    doc.moveDown();
-
-    // Add patient info
-    doc.fontSize(12).text(`Name: ${patient.patientName}`);
-    if (patient.email) doc.text(`Email: ${patient.email}`);
-    if (patient.phone) doc.text(`Phone: ${patient.phone}`);
-    doc.moveDown();
-
-    // Add folders and files
-    for (const folder of patient.folders) {
-      doc.fontSize(14).text(folder.name, { underline: true });
-      doc.moveDown(0.5);
-
-      for (const file of folder.files) {
-        doc.fontSize(11).text(`• ${file.fileName} (${formatFileSize(file.size)})`);
-        doc.text(`  Uploaded: ${new Date(file.uploadedAt).toLocaleDateString()}`);
-      }
-      doc.moveDown();
-    }
-
-    doc.end();
+    await pdfService.generatePatientPdf(patient, res);
   } catch (error) {
     console.error("[Patient Controller] PDF error:", error);
-    return res.status(error.message === "Patient not found" ? 404 : 500).json({
-      success: false,
-      message: error.message,
-    });
+    if (!res.headersSent) {
+      return res.status(error.message === "Patient not found" ? 404 : 500).json({
+        success: false,
+        message: error.message,
+      });
+    }
   }
 };
 
@@ -160,43 +213,15 @@ export const downloadFolderPdf = async (req, res) => {
     console.log("[Patient Controller] Generating folder PDF:", folderName);
 
     const patient = await patientService.getPatientById(hospitalId, patientId);
-    const folder = patient.folders.find((f) => f.name === folderName);
-
-    if (!folder) {
-      return res.status(404).json({
-        success: false,
-        message: "Folder not found",
-      });
-    }
-
-    // Create PDF document
-    const doc = new PDFDocument();
-    const filename = `${patient.patientName}_${folderName}.pdf`;
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
-    doc.pipe(res);
-
-    // Add title
-    doc.fontSize(18).text(`${folderName} - ${patient.patientName}`, { align: "center" });
-    doc.moveDown();
-
-    // Add files
-    for (const file of folder.files) {
-      doc.fontSize(12).text(`${file.fileName}`);
-      doc.text(`Size: ${formatFileSize(file.size)}`);
-      doc.text(`Uploaded: ${new Date(file.uploadedAt).toLocaleDateString()}`);
-      doc.moveDown();
-    }
-
-    doc.end();
+    await pdfService.generateFolderPdf(patient, folderName, res);
   } catch (error) {
     console.error("[Patient Controller] Folder PDF error:", error);
-    return res.status(error.message.includes("not found") ? 404 : 500).json({
-      success: false,
-      message: error.message,
-    });
+    if (!res.headersSent) {
+      return res.status(error.message.includes("not found") ? 404 : 500).json({
+        success: false,
+        message: error.message,
+      });
+    }
   }
 };
 
@@ -212,28 +237,7 @@ export const downloadAllZip = async (req, res) => {
     console.log("[Patient Controller] Generating ZIP for patient:", patientId);
 
     const patient = await patientService.getPatientById(hospitalId, patientId);
-
-    const archive = archiver("zip", { zlib: { level: 9 } });
-    const filename = `${patient.patientName}_records.zip`;
-
-    res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
-    archive.pipe(res);
-
-    // Add files from all folders
-    for (const folder of patient.folders) {
-      for (const file of folder.files) {
-        try {
-          const stream = await r2Service.getFileStream(file.fileUrl);
-          archive.append(stream, { name: `${folder.name}/${file.fileName}` });
-        } catch (error) {
-          console.error("[Patient Controller] Error streaming file:", file.fileUrl, error);
-        }
-      }
-    }
-
-    await archive.finalize();
+    await zipService.generatePatientZip(patient, res);
   } catch (error) {
     console.error("[Patient Controller] ZIP error:", error);
     if (!res.headersSent) {
@@ -247,7 +251,7 @@ export const downloadAllZip = async (req, res) => {
 
 /**
  * GET /api/patients/:patientId/folders/:folderName/zip
- * Download folder as ZIP
+ * Download folder-wise ZIP
  */
 export const downloadFolderZip = async (req, res) => {
   try {
@@ -257,34 +261,7 @@ export const downloadFolderZip = async (req, res) => {
     console.log("[Patient Controller] Generating folder ZIP:", folderName);
 
     const patient = await patientService.getPatientById(hospitalId, patientId);
-    const folder = patient.folders.find((f) => f.name === folderName);
-
-    if (!folder) {
-      return res.status(404).json({
-        success: false,
-        message: "Folder not found",
-      });
-    }
-
-    const archive = archiver("zip", { zlib: { level: 9 } });
-    const filename = `${patient.patientName}_${folderName}.zip`;
-
-    res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
-    archive.pipe(res);
-
-    // Add files from folder
-    for (const file of folder.files) {
-      try {
-        const stream = await r2Service.getFileStream(file.fileUrl);
-        archive.append(stream, { name: file.fileName });
-      } catch (error) {
-        console.error("[Patient Controller] Error streaming file:", file.fileUrl, error);
-      }
-    }
-
-    await archive.finalize();
+    await zipService.generateFolderZip(patient, folderName, res);
   } catch (error) {
     console.error("[Patient Controller] Folder ZIP error:", error);
     if (!res.headersSent) {
@@ -332,9 +309,11 @@ function formatFileSize(bytes) {
 }
 
 export default {
+  createPatient,
   getPatients,
   getPatientById,
   getFolderFiles,
+  uploadFile,
   downloadAllPdf,
   downloadFolderPdf,
   downloadAllZip,

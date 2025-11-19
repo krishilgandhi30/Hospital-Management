@@ -3,7 +3,7 @@
  * Handles file operations using AWS S3 SDK v3
  */
 
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, HeadObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import config from "../config/env.js";
 
@@ -155,6 +155,30 @@ export const deleteFile = async (key) => {
 };
 
 /**
+ * Get signed URL for file upload (for direct frontend uploads)
+ * @param {string} key - File path in R2
+ * @param {string} mimeType - File MIME type
+ * @param {number} expiresIn - Expiration time in seconds (default: 3600)
+ * @returns {Promise<string>}
+ */
+export const getSignedUploadUrl = async (key, mimeType, expiresIn = 3600) => {
+  try {
+    console.log("[R2] Generating signed upload URL:", key);
+    const command = new PutObjectCommand({
+      Bucket: config.R2_BUCKET_NAME,
+      Key: key,
+      ContentType: mimeType,
+    });
+
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
+    return signedUrl;
+  } catch (error) {
+    console.error("[R2] Signed Upload URL error:", error);
+    throw new Error(`Failed to generate signed upload URL: ${error.message}`);
+  }
+};
+
+/**
  * Delete all objects with a prefix (batch delete)
  * @param {string} prefix - Folder prefix
  * @returns {Promise<number>}
@@ -162,13 +186,35 @@ export const deleteFile = async (key) => {
 export const deleteFolder = async (prefix) => {
   try {
     console.log("[R2] Deleting folder with prefix:", prefix);
-    const files = await listFolderObjects(prefix);
     let deletedCount = 0;
+    let continuationToken;
 
-    for (const file of files) {
-      await deleteFile(file.key);
-      deletedCount++;
-    }
+    do {
+      const listCommand = new ListObjectsV2Command({
+        Bucket: config.R2_BUCKET_NAME,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      });
+
+      const listResult = await s3Client.send(listCommand);
+
+      if (listResult.Contents && listResult.Contents.length > 0) {
+        const objectsToDelete = listResult.Contents.map((obj) => ({ Key: obj.Key }));
+
+        const deleteCommand = new DeleteObjectsCommand({
+          Bucket: config.R2_BUCKET_NAME,
+          Delete: {
+            Objects: objectsToDelete,
+            Quiet: true,
+          },
+        });
+
+        await s3Client.send(deleteCommand);
+        deletedCount += objectsToDelete.length;
+      }
+
+      continuationToken = listResult.NextContinuationToken;
+    } while (continuationToken);
 
     console.log("[R2] Deleted", deletedCount, "files");
     return deletedCount;
@@ -206,6 +252,7 @@ export const getFileMetadata = async (key) => {
 export default {
   uploadFile,
   getSignedFileUrl,
+  getSignedUploadUrl,
   getFileStream,
   listFolderObjects,
   deleteFile,

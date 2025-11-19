@@ -8,13 +8,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { AuthProvider } from "../hooks/useAuth";
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { Login } from "../pages/Login";
-import { OtpVerification } from "../pages/OtpVerification";
-import { Dashboard } from "../pages/Dashboard";
-import { LandingPage } from "../pages/LandingPage";
-import { PatientsList } from "../pages/PatientsList";
-import { PatientDetails } from "../pages/PatientDetails";
-import { FileList } from "../pages/FileList";
+import Login from "../pages/Login";
+import OtpVerification from "../pages/OtpVerification";
+import Dashboard from "../pages/Dashboard";
+import PatientDetails from "../pages/PatientDetails";
+import FolderView from "../pages/FolderView";
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -26,7 +24,7 @@ export const AppRoutes: React.FC = () => {
             <Route path="/login" element={<Login />} />
             <Route path="/verify-otp" element={<OtpVerification />} />
 
-            {/* Protected Routes */}
+            {/* Patient Management Routes */}
             <Route
               path="/dashboard"
               element={
@@ -35,23 +33,9 @@ export const AppRoutes: React.FC = () => {
                 </ProtectedRoute>
               }
             />
-
-            {/* Patient Management Routes */}
             <Route
               path="/"
-              element={
-                <ProtectedRoute>
-                  <LandingPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/patients"
-              element={
-                <ProtectedRoute>
-                  <PatientsList />
-                </ProtectedRoute>
-              }
+              element={<Navigate to="/dashboard" replace />}
             />
             <Route
               path="/patients/:patientId"
@@ -62,10 +46,10 @@ export const AppRoutes: React.FC = () => {
               }
             />
             <Route
-              path="/patients/:patientId/files/:folderName"
+              path="/patients/:patientId/folders/:folderName"
               element={
                 <ProtectedRoute>
-                  <FileList />
+                  <FolderView />
                 </ProtectedRoute>
               }
             />

@@ -46,15 +46,15 @@ router.post(
 
 /**
  * POST /api/auth/refresh-token
- * Refresh access token using refresh token
+ * Refresh access token using refresh token (from cookie)
  */
-router.post("/refresh-token", [body("refreshToken").notEmpty().withMessage("Refresh token is required")], handleValidationErrors, refreshToken);
+router.post("/refresh-token", refreshToken);
 
 /**
  * POST /api/auth/logout
- * Invalidate session
+ * Invalidate session (uses refresh token from cookie)
  */
-router.post("/logout", [body("refreshToken").notEmpty().withMessage("Refresh token is required")], handleValidationErrors, logout);
+router.post("/logout", logout);
 
 /**
  * POST /api/auth/resend-otp

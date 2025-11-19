@@ -6,6 +6,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
 import connectDB from "./config/db.js";
@@ -42,6 +43,7 @@ app.use(generalLimiter);
 // ============ BODY PARSING ============
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
+app.use(cookieParser());
 
 // ============ CORS CONFIGURATION ============
 app.use(
@@ -99,6 +101,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
 
 export default app;

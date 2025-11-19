@@ -30,19 +30,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load stored data on mount
   useEffect(() => {
-    const accessToken = localStorage.getItem("accessToken");
-    const refreshToken = localStorage.getItem("refreshToken");
-    const hospitalData = localStorage.getItem("hospital");
+    const checkAuth = async () => {
+      try {
+        // Always try to refresh token to check if session is valid
+        // The token is in the cookie, so this will work even if localStorage is cleared
+        const response = await authService.refreshToken();
 
-    if (accessToken && hospitalData) {
-      setState((prev) => ({
-        ...prev,
-        accessToken,
-        refreshToken,
-        hospital: JSON.parse(hospitalData),
-        isAuthenticated: true,
-      }));
-    }
+        // Get hospital data from localStorage if available, otherwise from response
+        const hospitalData = localStorage.getItem("hospital");
+        const hospital = hospitalData ? JSON.parse(hospitalData) : response.data.hospital;
+
+        // If we got hospital from response but not in localStorage, save it
+        if (!hospitalData && response.data.hospital) {
+          localStorage.setItem("hospital", JSON.stringify(response.data.hospital));
+        }
+
+        setState((prev) => ({
+          ...prev,
+          accessToken: response.data.accessToken,
+          hospital: hospital,
+          isAuthenticated: true,
+          loading: false,
+        }));
+      } catch (error) {
+        // If refresh fails, we are not authenticated
+        // Clear any stale data
+        localStorage.removeItem("hospital");
+        localStorage.removeItem("tempToken");
+
+        setState((prev) => ({
+          ...prev,
+          isAuthenticated: false,
+          loading: false,
+        }));
+      }
+    };
+
+    checkAuth();
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -73,13 +97,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const response = await authService.verifyOtp(otp);
-      authService.storeTokens(response.data.accessToken, response.data.refreshToken);
+      // Tokens are in cookies now, so we don't store them in localStorage
+      // authService.storeTokens(response.data.accessToken, response.data.refreshToken);
       localStorage.setItem("hospital", JSON.stringify(response.data.hospital));
+
+      // CRITICAL: Remove tempToken so it doesn't interfere with cookie-based auth
+      localStorage.removeItem("tempToken");
 
       setState((prev) => ({
         ...prev,
-        accessToken: response.data.accessToken,
-        refreshToken: response.data.refreshToken,
+        // accessToken: response.data.accessToken, // Not returned in body anymore
+        // refreshToken: response.data.refreshToken, // Not returned in body anymore
         hospital: response.data.hospital,
         isAuthenticated: true,
         tempToken: null,
@@ -99,9 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      if (state.refreshToken) {
-        await authService.logout(state.refreshToken);
-      }
+      await authService.logout();
     } catch (error) {
       console.error("Logout error:", error);
     } finally {

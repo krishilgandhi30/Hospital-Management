@@ -5,6 +5,8 @@
 
 import { body, validationResult } from "express-validator";
 import Hospital from "../models/Hospital.js";
+import Session from "../models/Session.js";
+import AuditLog from "../models/AuditLog.js";
 import { comparePassword, hashPassword } from "../utils/hash.js";
 import { generateTempToken } from "../utils/jwt.js";
 import { createOtp, verifyOtp as verifyOtpService } from "../services/otp.service.js";
@@ -35,17 +37,57 @@ export const login = async (req, res) => {
     console.log("[Auth Controller] Finding hospital by email:", email);
     const hospital = await Hospital.findOne({ email: email.toLowerCase() });
 
+    const ipAddress = req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+
     if (!hospital) {
       console.log("[Auth Controller] Hospital not found for email:", email);
+      // Log failed attempt
+      await AuditLog.create({
+        action: "LOGIN_ATTEMPT",
+        status: "FAILURE",
+        ipAddress,
+        userAgent,
+        metadata: { email, failureReason: "User not found" },
+      });
+
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
+
+    // Check for account lockout
+    if (hospital.lockUntil && hospital.lockUntil > Date.now()) {
+      console.log("[Auth Controller] Account is locked for:", email);
+      await AuditLog.create({
+        userId: hospital._id,
+        action: "LOGIN_ATTEMPT",
+        status: "FAILURE",
+        ipAddress,
+        userAgent,
+        metadata: { email, failureReason: "Account locked" },
+      });
+
+      return res.status(423).json({
+        success: false,
+        message: "Account is locked. Please try again later.",
+        lockUntil: hospital.lockUntil,
+      });
+    }
+
     console.log("[Auth Controller] Hospital found:", hospital._id);
 
     if (!hospital.isActive) {
       console.log("[Auth Controller] Hospital account is inactive");
+      await AuditLog.create({
+        userId: hospital._id,
+        action: "LOGIN_ATTEMPT",
+        status: "FAILURE",
+        ipAddress,
+        userAgent,
+        metadata: { email, failureReason: "Account inactive" },
+      });
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
@@ -58,16 +100,47 @@ export const login = async (req, res) => {
 
     if (!isPasswordValid) {
       console.log("[Auth Controller] Password mismatch for hospital:", hospital._id);
+
+      // Increment failed attempts
+      hospital.failedLoginAttempts += 1;
+
+      // Lock account if too many attempts (e.g., 5 attempts)
+      if (hospital.failedLoginAttempts >= 5) {
+        hospital.lockUntil = Date.now() + 15 * 60 * 1000; // 15 minutes
+        console.log("[Auth Controller] Locking account due to too many failed attempts");
+      }
+
+      await hospital.save();
+
+      await AuditLog.create({
+        userId: hospital._id,
+        action: "LOGIN_ATTEMPT",
+        status: "FAILURE",
+        ipAddress,
+        userAgent,
+        metadata: { email, failureReason: "Invalid password", attempts: hospital.failedLoginAttempts },
+      });
+
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
+
+    // Reset failed attempts on success (but don't save yet, wait for OTP verification?)
+    // Actually, password success is just step 1. We can reset here or after OTP.
+    // Let's reset here to prevent lockout if they know password but fail OTP.
+    if (hospital.failedLoginAttempts > 0) {
+      hospital.failedLoginAttempts = 0;
+      hospital.lockUntil = undefined;
+      await hospital.save();
+    }
+
     console.log("[Auth Controller] Password verified successfully");
 
     // Get client IP and user agent
-    const ipAddress = req.ip || req.connection.remoteAddress;
-    const userAgent = req.headers["user-agent"];
+    // const ipAddress = req.ip || req.connection.remoteAddress; // Already defined above
+    // const userAgent = req.headers["user-agent"]; // Already defined above
     console.log("[Auth Controller] Creating OTP for hospital:", hospital._id);
     console.log("[Auth Controller] IP:", ipAddress);
 
@@ -89,6 +162,15 @@ export const login = async (req, res) => {
     console.log("[Auth Controller] Generating tempToken...");
     const tempToken = generateTempToken(hospital._id);
     console.log("[Auth Controller] TempToken generated, preparing response...");
+
+    await AuditLog.create({
+      userId: hospital._id,
+      action: "LOGIN_ATTEMPT",
+      status: "SUCCESS", // Password success, waiting for OTP
+      ipAddress,
+      userAgent,
+      details: { step: "PASSWORD_VERIFIED" },
+    });
 
     return res.status(200).json({
       success: true,
@@ -160,12 +242,38 @@ export const verifyOtp = async (req, res) => {
     // Get hospital data
     const hospital = await Hospital.findById(hospitalId);
 
+    await AuditLog.create({
+      userId: hospitalId,
+      action: "LOGIN_SUCCESS",
+      status: "SUCCESS",
+      ipAddress,
+      userAgent,
+      details: { method: "OTP" },
+    });
+
+    // Set cookies
+    const isProduction = process.env.NODE_ENV === "production";
+
+    res.cookie("accessToken", session.accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie("refreshToken", session.refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     return res.status(200).json({
       success: true,
       message: "OTP verified successfully",
       data: {
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
+        // accessToken: session.accessToken, // Removed, sent in cookie
+        // refreshToken: session.refreshToken, // Removed, sent in cookie
         tokenType: session.tokenType,
         expiresIn: session.expiresIn,
         hospital: hospital.toJSON(),
@@ -186,7 +294,7 @@ export const verifyOtp = async (req, res) => {
  */
 export const refreshToken = async (req, res) => {
   try {
-    const { refreshToken: token } = req.body;
+    const token = req.cookies.refreshToken || req.body.refreshToken;
 
     if (!token) {
       return res.status(400).json({
@@ -197,10 +305,26 @@ export const refreshToken = async (req, res) => {
 
     const tokens = await refreshAccessToken(token);
 
+    // Get hospital data to send back
+    const session = await Session.findOne({ refreshToken: token });
+    const hospital = await Hospital.findById(session.hospitalId);
+
+    // Set new access token cookie
+    const isProduction = process.env.NODE_ENV === "production";
+    res.cookie("accessToken", tokens.accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
     return res.status(200).json({
       success: true,
       message: "Token refreshed successfully",
-      data: tokens,
+      data: {
+        ...tokens,
+        hospital: hospital ? hospital.toJSON() : null,
+      },
     });
   } catch (error) {
     console.error("Token refresh error:", error);
@@ -217,16 +341,24 @@ export const refreshToken = async (req, res) => {
  */
 export const logout = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const token = req.cookies.refreshToken || req.body.refreshToken;
 
-    if (!refreshToken) {
+    if (!token) {
       return res.status(400).json({
         success: false,
         message: "Refresh token is required",
       });
     }
 
-    await invalidateSession(refreshToken);
+    await invalidateSession(token);
+
+    // Clear cookies
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    // Log logout
+    // We might not have user ID here easily unless we decode token, but session invalidation handles it.
+    // Ideally we should log who logged out.
 
     return res.status(200).json({
       success: true,

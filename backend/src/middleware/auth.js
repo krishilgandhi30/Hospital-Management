@@ -11,7 +11,12 @@ import Hospital from "../models/Hospital.js";
  */
 export const verifyAccessToken = (req, res, next) => {
   try {
-    const token = extractTokenFromHeader(req.headers.authorization);
+    // Try to get token from cookie first, then fall back to Authorization header
+    let token = req.cookies?.accessToken;
+
+    if (!token) {
+      token = extractTokenFromHeader(req.headers.authorization);
+    }
 
     if (!token) {
       return res.status(401).json({

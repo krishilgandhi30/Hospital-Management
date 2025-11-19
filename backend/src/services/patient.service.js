@@ -19,7 +19,7 @@ export const createPatient = async (hospitalId, patientData) => {
     const patient = new Patient({
       hospitalId,
       ...patientData,
-      folders: [],
+      // folders will be auto-populated by default in schema
     });
 
     await patient.save();
@@ -39,11 +39,19 @@ export const createPatient = async (hospitalId, patientData) => {
  */
 export const getPatients = async (hospitalId, options = {}) => {
   try {
-    const { limit = 20, skip = 0, status = "active" } = options;
+    const { limit = 20, skip = 0, status = "active", search } = options;
     console.log("[Patient Service] Fetching patients for hospital:", hospitalId);
 
     const query = { hospitalId };
     if (status) query.status = status;
+
+    if (search) {
+      query.$or = [
+        { patientName: { $regex: search, $options: "i" } },
+        { medicalRecordNumber: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+      ];
+    }
 
     const patients = await Patient.find(query)
       .limit(limit)

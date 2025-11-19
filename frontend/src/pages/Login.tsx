@@ -117,7 +117,15 @@ export const Login: React.FC = () => {
       console.error("[Login] Login error:", error);
       console.error("[Login] Error message:", error.message);
       console.error("[Login] Error details:", error);
-      // Error is already set in state by useAuth hook
+
+      if (error.response?.status === 423) {
+        const lockUntil = new Date(error.response.data.lockUntil);
+        const timeStr = lockUntil.toLocaleTimeString();
+        setDisplayError(`Account locked until ${timeStr}. Please try again later.`);
+      } else {
+        // Error is already set in state by useAuth hook, but we can set it here too for immediate feedback
+        setDisplayError(error.message || "Login failed");
+      }
     }
   };
 
