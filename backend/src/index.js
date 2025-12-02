@@ -9,6 +9,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
+import hospitalsRoutes from "./routes/hospitals.routes.js";
 import connectDB from "./config/db.js";
 import config from "./config/env.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
@@ -57,6 +58,7 @@ app.use(
 // ============ API ROUTES ============
 app.use("/api/auth", authRoutes);
 app.use("/api/patients", patientRoutes);
+app.use("/api/hospitals", hospitalsRoutes);
 
 // ============ HEALTH CHECK ============
 app.get("/health", (req, res) => {

@@ -202,6 +202,15 @@ export const Login: React.FC = () => {
             <code className="bg-gray-100 px-2 py-1 rounded">Password123</code>
           </p>
         </div>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
+            Don't have an account?{" "}
+            <button type="button" onClick={() => navigate("/register")} className="text-blue-600 hover:text-blue-700 font-medium focus:outline-none focus:underline">
+              Register Hospital
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

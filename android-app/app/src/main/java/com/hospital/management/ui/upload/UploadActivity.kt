@@ -50,7 +50,8 @@ class UploadActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val file = File(imageUri!!.path!!)
-                val requestFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
+                val mediaType = "image/jpeg".toMediaTypeOrNull()
+                val requestFile = file.asRequestBody(mediaType)
                 val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
 
                 val apiService = RetrofitClient.getApiService(this@UploadActivity)

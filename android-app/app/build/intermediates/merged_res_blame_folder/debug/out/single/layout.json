@@ -1,0 +1,50 @@
+[
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_login.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_login.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_folder_view.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_folder_view.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_folder_details.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_folder_details.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_scanner.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_scanner.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/item_file.xml",
+        "source": "com.hospital.management.app-main-85:/layout/item_file.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_upload.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_upload.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_admission.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_admission.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_otp.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_otp.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_dashboard.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_dashboard.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/activity_patient_list.xml",
+        "source": "com.hospital.management.app-main-85:/layout/activity_patient_list.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/item_patient.xml",
+        "source": "com.hospital.management.app-main-85:/layout/item_patient.xml"
+    },
+    {
+        "merged": "com.hospital.management.app-mergeDebugResources-82:/layout/item_folder.xml",
+        "source": "com.hospital.management.app-main-85:/layout/item_folder.xml"
+    }
+]

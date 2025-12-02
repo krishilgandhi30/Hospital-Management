@@ -20,33 +20,36 @@ class LoginActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.btnLogin.setOnClickListener {
-            val hospitalId = binding.etHospitalId.text.toString()
+            val email = binding.etHospitalId.text.toString()
             val password = binding.etPassword.text.toString()
 
-            if (hospitalId.isNotEmpty() && password.isNotEmpty()) {
-                login(hospitalId, password)
+            if (email.isNotEmpty() && password.isNotEmpty()) {
+                login(email, password)
             } else {
-                Toast.makeText(this, "Please enter Hospital ID and Password", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Please enter Email and Password", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    private fun login(hospitalId: String, password: String) {
+    private fun login(email: String, password: String) {
         binding.progressBar.visibility = android.view.View.VISIBLE
         binding.btnLogin.isEnabled = false
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val apiService = RetrofitClient.getApiService(this@LoginActivity)
-                val response = apiService.login(mapOf("hospitalId" to hospitalId, "password" to password))
+                val response = apiService.login(mapOf("email" to email, "password" to password))
 
                 withContext(Dispatchers.Main) {
                     binding.progressBar.visibility = android.view.View.GONE
                     binding.btnLogin.isEnabled = true
 
                     if (response.isSuccessful && response.body()?.get("success") == true) {
+                        val responseData = response.body()?.get("data") as? Map<*, *>
+                        val tempToken = responseData?.get("tempToken") as? String
                         val intent = Intent(this@LoginActivity, OtpActivity::class.java)
-                        intent.putExtra("hospitalId", hospitalId)
+                        intent.putExtra("tempToken", tempToken)
+                        intent.putExtra("email", email)
                         startActivity(intent)
                         finish()
                     } else {

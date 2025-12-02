@@ -14,13 +14,12 @@ import * as zipService from "../services/zip.service.js";
  */
 export const createPatient = async (req, res) => {
   try {
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
     const { patientName, email, phone, dateOfBirth, medicalRecordNumber, notes } = req.body;
 
     console.log("[Patient Controller] Creating patient:", patientName);
 
-    const patient = await patientService.createPatient({
-      hospitalId,
+    const patient = await patientService.createPatient(hospitalId, {
       patientName,
       email,
       phone,
@@ -49,10 +48,32 @@ export const createPatient = async (req, res) => {
  */
 export const getPatients = async (req, res) => {
   try {
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
     const { limit = 20, skip = 0, search } = req.query;
 
-    console.log("[Patient Controller] Fetching patients for hospital:", hospitalId, "Search:", search);
+    console.log("[Patient Controller] ===== GET PATIENTS DEBUG =====");
+    console.log("[Patient Controller] Hospital ID from token:", hospitalId);
+    console.log("[Patient Controller] Hospital ID type:", typeof hospitalId);
+    console.log("[Patient Controller] Query params - limit:", limit, "skip:", skip, "search:", search);
+
+    // Query database to check patients count
+    const Patient = (await import("../models/Patient.js")).default;
+    const mongoose = (await import("mongoose")).default;
+    const allPatientsCount = await Patient.countDocuments({});
+
+    // Try both string and ObjectId comparison
+    const patientsForHospitalString = await Patient.countDocuments({ hospitalId: hospitalId });
+    const patientsForHospitalObjectId = await Patient.countDocuments({ hospitalId: new mongoose.Types.ObjectId(hospitalId) });
+    const allPatients = await Patient.find({}).limit(5);
+
+    console.log("[Patient Controller] Total patients in DB:", allPatientsCount);
+    console.log("[Patient Controller] Patients matching hospitalId (string):", patientsForHospitalString);
+    console.log("[Patient Controller] Patients matching hospitalId (ObjectId):", patientsForHospitalObjectId);
+    console.log(
+      "[Patient Controller] Sample patient hospitalIds:",
+      allPatients.map((p) => ({ id: String(p.hospitalId), type: typeof p.hospitalId, name: p.patientName })),
+    );
+    console.log("[Patient Controller] ===========================");
 
     const { patients, total } = await patientService.getPatients(hospitalId, {
       limit: parseInt(limit),
@@ -85,7 +106,7 @@ export const getPatients = async (req, res) => {
 export const getPatientById = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
 
     console.log("[Patient Controller] Fetching patient:", patientId);
 
@@ -111,7 +132,7 @@ export const getPatientById = async (req, res) => {
 export const getFolderFiles = async (req, res) => {
   try {
     const { patientId, folderName } = req.params;
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
 
     console.log("[Patient Controller] Fetching files for folder:", folderName);
 
@@ -137,7 +158,7 @@ export const getFolderFiles = async (req, res) => {
 export const uploadFile = async (req, res) => {
   try {
     const { patientId, folderName } = req.params;
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
     const file = req.file;
 
     if (!file) {
@@ -184,7 +205,7 @@ export const uploadFile = async (req, res) => {
 export const downloadAllPdf = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
 
     console.log("[Patient Controller] Generating PDF for patient:", patientId);
 
@@ -208,7 +229,7 @@ export const downloadAllPdf = async (req, res) => {
 export const downloadFolderPdf = async (req, res) => {
   try {
     const { patientId, folderName } = req.params;
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
 
     console.log("[Patient Controller] Generating folder PDF:", folderName);
 
@@ -232,7 +253,7 @@ export const downloadFolderPdf = async (req, res) => {
 export const downloadAllZip = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
 
     console.log("[Patient Controller] Generating ZIP for patient:", patientId);
 
@@ -256,7 +277,7 @@ export const downloadAllZip = async (req, res) => {
 export const downloadFolderZip = async (req, res) => {
   try {
     const { patientId, folderName } = req.params;
-    const hospitalId = req.hospital?._id;
+    const hospitalId = req.hospital?.id;
 
     console.log("[Patient Controller] Generating folder ZIP:", folderName);
 

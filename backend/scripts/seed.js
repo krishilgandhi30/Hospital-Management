@@ -66,16 +66,65 @@ const seedDatabase = async () => {
     );
 
     // Remove password field (already hashed)
-    hospitalsToCreate.forEach((h) => delete h.password);
+    for (const h of hospitalsToCreate) {
+      delete h.password;
+    }
 
     // Insert hospitals
     const created = await Hospital.insertMany(hospitalsToCreate);
     console.log(`✓ Created ${created.length} sample hospitals`);
 
     // Log created hospitals
-    created.forEach((hospital) => {
+    for (const hospital of created) {
       console.log(`  - ${hospital.hospitalName} (${hospital.email})`);
-    });
+    }
+
+    // Add sample patients for all hospitals
+    const Patient = (await import("../src/models/Patient.js")).default;
+    // Delete all patients before seeding
+    await Patient.deleteMany({});
+
+    let totalPatients = 0;
+    for (const hospital of created) {
+      const samplePatients = [
+        {
+          hospitalId: hospital._id,
+          patientName: "John Doe",
+          email: "john.doe@example.com",
+          phone: "+919999999999",
+          dateOfBirth: new Date("1990-01-01"),
+          medicalRecordNumber: `MRN-${hospital.hospitalName.replace(/\s/g, "").toUpperCase()}-001`,
+          notes: "Diabetic patient. Needs regular checkups.",
+          status: "active",
+        },
+        {
+          hospitalId: hospital._id,
+          patientName: "Jane Smith",
+          email: "jane.smith@example.com",
+          phone: "+919888888888",
+          dateOfBirth: new Date("1985-05-15"),
+          medicalRecordNumber: `MRN-${hospital.hospitalName.replace(/\s/g, "").toUpperCase()}-002`,
+          notes: "Allergic to penicillin.",
+          status: "active",
+        },
+      ];
+      const createdPatients = await Patient.insertMany(samplePatients);
+      totalPatients += createdPatients.length;
+      console.log(`✓ Created ${createdPatients.length} sample patients for hospital: ${hospital.hospitalName}`);
+    }
+    console.log(`✓ Total patients seeded: ${totalPatients}`);
+
+    // Debug: Print all hospital IDs
+    console.log("\nHospital IDs after seeding:");
+    for (const hospital of created) {
+      console.log(`  - ${hospital.hospitalName}: ${hospital._id}`);
+    }
+    // Debug: Print all patients and their hospitalId
+    const allPatients = await Patient.find({});
+    console.log("\nPatient hospitalId mapping after seeding:");
+    for (const patient of allPatients) {
+      console.log(`  - ${patient.patientName}: ${patient.hospitalId}`);
+    }
 
     process.exit(0);
   } catch (error) {

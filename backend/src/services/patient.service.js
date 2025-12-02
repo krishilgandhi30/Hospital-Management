@@ -3,6 +3,7 @@
  * Business logic for patient operations
  */
 
+import mongoose from "mongoose";
 import Patient from "../models/Patient.js";
 import { deleteFolder } from "./r2.service.js";
 
@@ -41,16 +42,19 @@ export const getPatients = async (hospitalId, options = {}) => {
   try {
     const { limit = 20, skip = 0, status = "active", search } = options;
     console.log("[Patient Service] Fetching patients for hospital:", hospitalId);
+    console.log("[Patient Service] Options - limit:", limit, "skip:", skip, "search:", search);
 
-    const query = { hospitalId };
+    // Convert hospitalId string to ObjectId for proper MongoDB comparison
+    const hospitalObjectId = mongoose.Types.ObjectId.isValid(hospitalId) ? new mongoose.Types.ObjectId(hospitalId) : hospitalId;
+
+    console.log("[Patient Service] Converted hospitalId to ObjectId:", hospitalObjectId);
+
+    const query = { hospitalId: hospitalObjectId };
     if (status) query.status = status;
 
-    if (search) {
-      query.$or = [
-        { patientName: { $regex: search, $options: "i" } },
-        { medicalRecordNumber: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-      ];
+    if (search && search.trim()) {
+      console.log("[Patient Service] Applying search filter for:", search);
+      query.$or = [{ patientName: { $regex: search, $options: "i" } }, { medicalRecordNumber: { $regex: search, $options: "i" } }, { phone: { $regex: search, $options: "i" } }];
     }
 
     const patients = await Patient.find(query)
@@ -79,9 +83,12 @@ export const getPatientById = async (hospitalId, patientId) => {
   try {
     console.log("[Patient Service] Fetching patient:", patientId);
 
+    // Convert hospitalId string to ObjectId for proper MongoDB comparison
+    const hospitalObjectId = mongoose.Types.ObjectId.isValid(hospitalId) ? new mongoose.Types.ObjectId(hospitalId) : hospitalId;
+
     const patient = await Patient.findOne({
       _id: patientId,
-      hospitalId,
+      hospitalId: hospitalObjectId,
     });
 
     if (!patient) {
@@ -107,8 +114,10 @@ export const createFolder = async (hospitalId, patientId, folderName) => {
   try {
     console.log("[Patient Service] Creating folder:", folderName, "for patient:", patientId);
 
+    const hospitalObjectId = mongoose.Types.ObjectId.isValid(hospitalId) ? new mongoose.Types.ObjectId(hospitalId) : hospitalId;
+
     const patient = await Patient.findOneAndUpdate(
-      { _id: patientId, hospitalId },
+      { _id: patientId, hospitalId: hospitalObjectId },
       {
         $push: {
           folders: {
@@ -144,9 +153,11 @@ export const addFileToFolder = async (hospitalId, patientId, folderName, fileDat
   try {
     console.log("[Patient Service] Adding file to folder:", folderName);
 
+    const hospitalObjectId = mongoose.Types.ObjectId.isValid(hospitalId) ? new mongoose.Types.ObjectId(hospitalId) : hospitalId;
+
     const patient = await Patient.findOne({
       _id: patientId,
-      hospitalId,
+      hospitalId: hospitalObjectId,
     });
 
     if (!patient) {
@@ -183,9 +194,11 @@ export const getFolderFiles = async (hospitalId, patientId, folderName) => {
   try {
     console.log("[Patient Service] Fetching files for folder:", folderName);
 
+    const hospitalObjectId = mongoose.Types.ObjectId.isValid(hospitalId) ? new mongoose.Types.ObjectId(hospitalId) : hospitalId;
+
     const patient = await Patient.findOne({
       _id: patientId,
-      hospitalId,
+      hospitalId: hospitalObjectId,
     });
 
     if (!patient) {
@@ -215,9 +228,11 @@ export const deletePatient = async (hospitalId, patientId) => {
   try {
     console.log("[Patient Service] Deleting patient:", patientId);
 
+    const hospitalObjectId = mongoose.Types.ObjectId.isValid(hospitalId) ? new mongoose.Types.ObjectId(hospitalId) : hospitalId;
+
     const patient = await Patient.findOne({
       _id: patientId,
-      hospitalId,
+      hospitalId: hospitalObjectId,
     });
 
     if (!patient) {
@@ -231,7 +246,7 @@ export const deletePatient = async (hospitalId, patientId) => {
     // Delete from database
     await Patient.deleteOne({
       _id: patientId,
-      hospitalId,
+      hospitalId: hospitalObjectId,
     });
 
     console.log("[Patient Service] Patient deleted successfully");

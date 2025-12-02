@@ -3,7 +3,10 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Login from "../pages/Login";
 import OtpVerification from "../pages/OtpVerification";
 import Dashboard from "../pages/Dashboard";
+import HospitalRegistration from "../pages/HospitalRegistration";
+import HospitalsList from "../pages/HospitalsList";
 import ProtectedRoute from "../components/ProtectedRoute";
+import AdminRoute from "../components/AdminRoute";
 import { MainLayout } from "../layouts/MainLayout";
 
 export const AppRoutes: React.FC = () => {
@@ -12,6 +15,24 @@ export const AppRoutes: React.FC = () => {
       {/* Public Routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/verify-otp" element={<OtpVerification />} />
+
+      {/* Admin Only Routes */}
+      <Route
+        path="/register"
+        element={
+          <AdminRoute>
+            <HospitalRegistration />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/hospitals"
+        element={
+          <AdminRoute>
+            <HospitalsList />
+          </AdminRoute>
+        }
+      />
 
       {/* Protected Routes */}
       <Route

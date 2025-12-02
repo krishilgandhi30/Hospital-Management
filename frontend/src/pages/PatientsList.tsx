@@ -30,12 +30,13 @@ export const PatientsList: React.FC = () => {
 
   useEffect(() => {
     loadPatients();
-  }, [currentPage]);
+  }, [currentPage, searchTerm]);
 
   const loadPatients = async () => {
     try {
       setLoading(true);
-      const data = (await fetchPatients(ITEMS_PER_PAGE, skip)) as any;
+      const skip = (currentPage - 1) * ITEMS_PER_PAGE;
+      const data = (await fetchPatients(ITEMS_PER_PAGE, skip, searchTerm)) as any;
       setPatients(data.patients || []);
       setTotalCount(data.total || 0);
     } catch (error: any) {
@@ -48,9 +49,7 @@ export const PatientsList: React.FC = () => {
     }
   };
 
-  const filteredPatients = patients.filter(
-    (patient) => patient.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) || patient.medicalRecordNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredPatients = patients; // No need for client-side filtering, server handles it now
 
   const handlePatientClick = (patientId: string) => {
     navigate(`/patients/${patientId}`);

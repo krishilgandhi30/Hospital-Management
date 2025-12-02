@@ -41,15 +41,16 @@ class AdmissionActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val apiService = RetrofitClient.getApiService(this@AdmissionActivity)
-                val body = mapOf(
-                    "patientName" to name,
-                    "dateOfBirth" to dob,
-                    "phone" to phone,
-                    "email" to email,
-                    "medicalRecordNumber" to mrn
+                val patientRequest = com.hospital.management.data.models.PatientRequest(
+                    patientName = name,
+                    dateOfBirth = dob,
+                    phone = phone,
+                    email = if (email.isNotEmpty()) email else null,
+                    medicalRecordNumber = mrn
                 )
                 
-                val response = apiService.createPatient(body)
+                // Cookies with auth tokens are automatically sent by OkHttp CookieJar
+                val response = apiService.createPatient(patientRequest)
 
                 withContext(Dispatchers.Main) {
                     binding.progressBar.visibility = android.view.View.GONE

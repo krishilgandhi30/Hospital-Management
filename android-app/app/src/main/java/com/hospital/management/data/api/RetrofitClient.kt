@@ -1,12 +1,12 @@
 package com.hospital.management.data.api
 
 import android.content.Context
-import okhttp3.JavaNetCookieJar
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import java.net.CookieManager
-import java.net.CookiePolicy
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
@@ -16,11 +16,20 @@ object RetrofitClient {
 
     fun getClient(context: Context): Retrofit {
         if (retrofit == null) {
-            val cookieManager = CookieManager()
-            cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL)
+            val cookieJar = object : CookieJar {
+                private val cookieStore = HashMap<String, List<Cookie>>()
+
+                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                    cookieStore[url.host] = cookies
+                }
+
+                override fun loadForRequest(url: HttpUrl): List<Cookie> {
+                    return cookieStore[url.host] ?: ArrayList()
+                }
+            }
 
             val client = OkHttpClient.Builder()
-                .cookieJar(JavaNetCookieJar(cookieManager))
+                .cookieJar(cookieJar)
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
