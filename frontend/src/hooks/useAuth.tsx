@@ -57,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         console.log("[useAuth] Hospital data found, verifying session with refreshToken()...");
         const response = await authService.refreshToken();
+        const hospital = hospitalData ? JSON.parse(hospitalData) : null;
 
         console.log("[useAuth] Session valid");
 

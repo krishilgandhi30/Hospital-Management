@@ -10,7 +10,7 @@ import { ErrorMessage } from "../components/ErrorMessage";
 import { LogoHeader } from "../components/LogoHeader";
 import { Navbar } from "../components/Navbar";
 import { TextInput } from "../components/TextInput";
-import { API_URL } from "../config/constants";
+import api from "../services/api";
 import { getEmailError, getPasswordError } from "../utils/validator";
 
 export const HospitalRegistration: React.FC = () => {
@@ -58,7 +58,7 @@ export const HospitalRegistration: React.FC = () => {
   };
 
   const handleChange = (field: keyof typeof formData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev: typeof formData) => ({ ...prev, [field]: value }));
     setDisplayError(null);
     setDisplaySuccess(null);
 
@@ -85,7 +85,7 @@ export const HospitalRegistration: React.FC = () => {
           error = !value ? "Address is required" : "";
           break;
       }
-      setErrors((prev) => ({ ...prev, [field]: error }));
+      setErrors((prev: typeof errors) => ({ ...prev, [field]: error }));
     }
   };
 
@@ -94,18 +94,18 @@ export const HospitalRegistration: React.FC = () => {
     if (file) {
       // Validate file type
       if (!file.type.startsWith("image/")) {
-        setErrors((prev) => ({ ...prev, logo: "Please select an image file" }));
+        setErrors((prev: typeof errors) => ({ ...prev, logo: "Please select an image file" }));
         return;
       }
 
       // Validate file size (max 2MB)
       if (file.size > 2 * 1024 * 1024) {
-        setErrors((prev) => ({ ...prev, logo: "Logo size must be less than 2MB" }));
+        setErrors((prev: typeof errors) => ({ ...prev, logo: "Logo size must be less than 2MB" }));
         return;
       }
 
       setLogoFile(file);
-      setErrors((prev) => ({ ...prev, logo: "" }));
+      setErrors((prev: typeof errors) => ({ ...prev, logo: "" }));
 
       // Create preview
       const reader = new FileReader();
@@ -142,16 +142,14 @@ export const HospitalRegistration: React.FC = () => {
         formDataToSend.append("logo", logoFile);
       }
 
-      const response = await fetch(`${API_URL}/api/auth/register-hospital`, {
-        method: "POST",
-        body: formDataToSend,
+      const response = await api.post("/auth/register-hospital", formDataToSend, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Registration failed");
-      }
+      // Axios throws on 4xx/5xx, so we don't need manual check
+      // Response data is in response.data
 
       setDisplaySuccess("Hospital registered successfully! Redirecting to hospitals list...");
 
@@ -160,7 +158,8 @@ export const HospitalRegistration: React.FC = () => {
         navigate("/hospitals");
       }, 2000);
     } catch (error: any) {
-      setDisplayError(error.message || "Registration failed. Please try again.");
+      const errorMessage = error.response?.data?.message || error.message || "Registration failed";
+      setDisplayError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -183,7 +182,7 @@ export const HospitalRegistration: React.FC = () => {
               type="text"
               placeholder="Enter hospital name"
               value={formData.hospitalName}
-              onChange={(value) => handleChange("hospitalName", value)}
+              onChange={(value: string) => handleChange("hospitalName", value)}
               error={errors.hospitalName}
               autoFocus
               required
@@ -225,7 +224,7 @@ export const HospitalRegistration: React.FC = () => {
               type="email"
               placeholder="hospital@example.com"
               value={formData.email}
-              onChange={(value) => handleChange("email", value)}
+              onChange={(value: string) => handleChange("email", value)}
               error={errors.email}
               autoComplete="email"
               required
@@ -243,7 +242,7 @@ export const HospitalRegistration: React.FC = () => {
                 type="password"
                 placeholder="••••••••"
                 value={formData.password}
-                onChange={(value) => handleChange("password", value)}
+                onChange={(value: string) => handleChange("password", value)}
                 error={errors.password}
                 autoComplete="new-password"
                 required
@@ -259,7 +258,7 @@ export const HospitalRegistration: React.FC = () => {
                 type="password"
                 placeholder="••••••••"
                 value={formData.confirmPassword}
-                onChange={(value) => handleChange("confirmPassword", value)}
+                onChange={(value: string) => handleChange("confirmPassword", value)}
                 error={errors.confirmPassword}
                 autoComplete="new-password"
                 required
@@ -276,7 +275,7 @@ export const HospitalRegistration: React.FC = () => {
               type="tel"
               placeholder="10-digit phone number"
               value={formData.phoneNumber}
-              onChange={(value) => handleChange("phoneNumber", value)}
+              onChange={(value: string) => handleChange("phoneNumber", value)}
               error={errors.phoneNumber}
               autoComplete="tel"
               required
@@ -293,7 +292,7 @@ export const HospitalRegistration: React.FC = () => {
               type="text"
               placeholder="Hospital address"
               value={formData.address}
-              onChange={(value) => handleChange("address", value)}
+              onChange={(value: string) => handleChange("address", value)}
               error={errors.address}
               autoComplete="street-address"
               required
