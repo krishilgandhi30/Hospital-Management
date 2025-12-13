@@ -21,7 +21,11 @@ export const LandingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center px-4">
       <div className="max-w-2xl text-center">
-        {hospital?.logoUrl && <img src={hospital.logoUrl} alt={hospital.hospitalName} className="w-24 h-24 mx-auto mb-6 rounded-lg shadow-lg" />}
+        {hospital?.logoUrl && (
+          <div className="w-24 h-24 mx-auto mb-6 rounded-full overflow-hidden shadow-lg border-4 border-white">
+            <img src={hospital.logoUrl} alt={hospital.hospitalName} className="w-full h-full object-cover" />
+          </div>
+        )}
 
         <h1 className="text-5xl font-bold text-gray-800 mb-4">{hospital?.hospitalName || "Hospital"}</h1>
         <p className="text-xl text-gray-600 mb-8">Patient Records Management System</p>

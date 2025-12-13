@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hospital Management</string>
+    
+    <!-- Login Screen -->
+    <string name="login_title">Hospital Management System</string>
+    <string name="phone_hint">Enter Phone Number</string>
+    <string name="send_otp">Sign In</string>
+    <string name="invalid_phone">Please enter a valid 10-digit phone number</string>
+    
+    <!-- OTP Screen -->
+    <string name="otp_title">Verify Your Identity</string>
+    <string name="otp_sent_success">OTP Sent Successfully</string>
+    <string name="otp_sent_message">We\'ve sent a 6-digit code to your registered phone</string>
+    <string name="verify_otp">Verify OTP</string>
+    <string name="resend_otp">Resend OTP</string>
+    <string name="invalid_otp">Please enter valid OTP</string>
+    <string name="didnt_receive_code">Didn\'t receive code?</string>
+    <string name="resend_in">Resend in %1$ds</string>
+    <string name="back_to_login">Back to Login</string>
+    <string name="enter_6_digit_otp">Enter 6-Digit OTP</string>
+    
+    <!-- Dashboard -->
+    <string name="dashboard_title">Dashboard</string>
+    <string name="new_admission">New Admission</string>
+    <string name="scan_uhid">Scan UHID</string>
+    <string name="logout">Logout</string>
+    
+    <!-- Admission -->
+    <string name="admission_title">Patient Admission</string>
+    <string name="patient_name">Patient Name</string>
+    <string name="patient_age">Age</string>
+    <string name="patient_gender">Gender</string>
+    <string name="patient_phone">Phone Number</string>
+    <string name="admission_date">Admission Date</string>
+    <string name="upload_documents">Upload Documents</string>
+    <string name="submit">Submit</string>
+    
+    <!-- Scanner -->
+    <string name="scanner_title">Scan UHID</string>
+    <string name="scan_instructions">Align QR code within frame to scan</string>
+    
+    <!-- Upload -->
+    <string name="upload_title">Upload Documents</string>
+    <string name="take_photo">Take Photo</string>
+    <string name="select_from_gallery">Select from Gallery</string>
+    <string name="upload">Upload</string>
+    
+    <!-- Common -->
+    <string name="loading">Loading…</string>
+    <string name="error">Error</string>
+    <string name="success">Success</string>
+    <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+    <string name="retry">Retry</string>
+</resources>

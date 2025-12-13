@@ -5,11 +5,127 @@
 
 import { body, validationResult } from "express-validator";
 import Hospital from "../models/Hospital.js";
+import Session from "../models/Session.js";
+import AuditLog from "../models/AuditLog.js";
 import { comparePassword, hashPassword } from "../utils/hash.js";
 import { generateTempToken } from "../utils/jwt.js";
 import { createOtp, verifyOtp as verifyOtpService } from "../services/otp.service.js";
 import { sendOtpSms, maskPhoneNumber } from "../services/sms.service.js";
 import { createSession, refreshAccessToken, invalidateSession } from "../services/token.service.js";
+
+/**
+ * Register Hospital - Create new hospital account
+ * POST /api/auth/register-hospital
+ */
+export const registerHospital = async (req, res) => {
+  try {
+    const { hospitalName, email, password, phoneNumber, address } = req.body;
+
+    // Validate inputs
+    if (!hospitalName || !email || !password || !phoneNumber || !address) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    // Check if logo was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Hospital logo is required",
+      });
+    }
+
+    // Check if hospital already exists
+    const existingHospital = await Hospital.findOne({ email: email.toLowerCase() });
+    if (existingHospital) {
+      return res.status(409).json({
+        success: false,
+        message: "Hospital with this email already exists",
+      });
+    }
+
+    // Convert logo to base64 data URL for storage
+    const logoBase64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+
+    // Hash password
+    const passwordHash = await hashPassword(password);
+
+    // Create new hospital
+    const hospital = await Hospital.create({
+      hospitalName,
+      email: email.toLowerCase(),
+      passwordHash,
+      phone: phoneNumber,
+      address,
+      logoUrl: logoBase64,
+      isActive: true,
+      failedLoginAttempts: 0,
+    });
+
+    // Log registration
+    const ipAddress = req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers["user-agent"];
+    await AuditLog.create({
+      userId: hospital._id,
+      action: "HOSPITAL_REGISTRATION",
+      status: "SUCCESS",
+      ipAddress,
+      userAgent,
+      details: { hospitalName, email },
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Hospital registered successfully",
+      data: {
+        id: hospital._id,
+        hospitalName: hospital.hospitalName,
+        email: hospital.email,
+      },
+    });
+  } catch (error) {
+    console.error("Hospital registration error:", error);
+
+    // Handle multer file upload errors
+    if (error.message && error.message.includes("Only image files")) {
+      return res.status(400).json({
+        success: false,
+        message: "Only image files are allowed (JPEG, PNG, GIF, WebP)",
+      });
+    }
+
+    if (error.message && error.message.includes("File too large")) {
+      return res.status(400).json({
+        success: false,
+        message: "Logo file size must be less than 2MB",
+      });
+    }
+
+    // Handle MongoDB duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      let message = "This information is already registered";
+
+      if (field === "email") {
+        message = "This email address is already registered";
+      } else if (field === "phone") {
+        message = "This phone number is already registered";
+      }
+
+      return res.status(409).json({
+        success: false,
+        message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Registration failed. Please try again later.",
+    });
+  }
+};
 
 /**
  * Login - Step 1: Validate credentials and send OTP
@@ -18,77 +134,116 @@ import { createSession, refreshAccessToken, invalidateSession } from "../service
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("[Auth Controller] LOGIN REQUEST received");
-    console.log("[Auth Controller] Email:", email);
-    console.log("[Auth Controller] Password length:", password?.length);
 
     // Validate inputs
     if (!email || !password) {
-      console.log("[Auth Controller] Missing email or password");
       return res.status(400).json({
         success: false,
         message: "Email and password are required",
       });
     }
 
-    // Find hospital by email
-    console.log("[Auth Controller] Finding hospital by email:", email);
-    const hospital = await Hospital.findOne({ email: email.toLowerCase() });
-
-    if (!hospital) {
-      console.log("[Auth Controller] Hospital not found for email:", email);
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-    console.log("[Auth Controller] Hospital found:", hospital._id);
-
-    if (!hospital.isActive) {
-      console.log("[Auth Controller] Hospital account is inactive");
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+    let hospital;
+    try {
+      hospital = await Hospital.findOne({ email: email.toLowerCase() });
+    } catch (e) {
+      throw new Error(`DB_FIND_ERROR: ${e.message}`);
     }
 
-    // Compare password
-    console.log("[Auth Controller] Comparing password...");
-    const isPasswordValid = await comparePassword(password, hospital.passwordHash);
-
-    if (!isPasswordValid) {
-      console.log("[Auth Controller] Password mismatch for hospital:", hospital._id);
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-    console.log("[Auth Controller] Password verified successfully");
-
-    // Get client IP and user agent
     const ipAddress = req.ip || req.connection.remoteAddress;
     const userAgent = req.headers["user-agent"];
-    console.log("[Auth Controller] Creating OTP for hospital:", hospital._id);
-    console.log("[Auth Controller] IP:", ipAddress);
 
-    // Create OTP
-    const otpData = await createOtp(hospital._id, ipAddress, userAgent);
-    console.log("[Auth Controller] OTP created:", otpData.plainOtp);
+    if (!hospital) {
+      try {
+        await AuditLog.create({
+          action: "LOGIN_ATTEMPT",
+          status: "FAILURE",
+          ipAddress,
+          userAgent,
+          metadata: { email, failureReason: "User not found" },
+        });
+      } catch (e) {
+        console.error("AuditLog error:", e);
+      }
 
-    // Send OTP via SMS
-    try {
-      console.log("[Auth Controller] Sending SMS to:", maskPhoneNumber(hospital.phone));
-      await sendOtpSms(hospital.phone, otpData.plainOtp);
-      console.log("[Auth Controller] SMS sent successfully");
-    } catch (smsError) {
-      console.error("[Auth Controller] SMS sending failed:", smsError);
-      // Continue even if SMS fails (for development/testing)
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
     }
 
-    // Generate temporary token for OTP verification
-    console.log("[Auth Controller] Generating tempToken...");
-    const tempToken = generateTempToken(hospital._id);
-    console.log("[Auth Controller] TempToken generated, preparing response...");
+    if (hospital.lockUntil && hospital.lockUntil > Date.now()) {
+      return res.status(423).json({
+        success: false,
+        message: "Account is locked. Please try again later.",
+        lockUntil: hospital.lockUntil,
+      });
+    }
+
+    if (!hospital.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    let isPasswordValid;
+    try {
+      isPasswordValid = await comparePassword(password, hospital.passwordHash);
+    } catch (e) {
+      throw new Error(`PASSWORD_COMPARE_ERROR: ${e.message}`);
+    }
+
+    if (!isPasswordValid) {
+      hospital.failedLoginAttempts += 1;
+      if (hospital.failedLoginAttempts >= 5) {
+        hospital.lockUntil = Date.now() + 15 * 60 * 1000;
+      }
+      await hospital.save();
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    if (hospital.failedLoginAttempts > 0) {
+      hospital.failedLoginAttempts = 0;
+      hospital.lockUntil = undefined;
+      await hospital.save();
+    }
+
+    let otpData;
+    try {
+      otpData = await createOtp(hospital._id, ipAddress, userAgent);
+    } catch (e) {
+      throw new Error(`CREATE_OTP_ERROR: ${e.message}`);
+    }
+
+    try {
+      await sendOtpSms(hospital.phone, otpData.plainOtp);
+    } catch (smsError) {
+      console.error("SMS error:", smsError);
+    }
+
+    let tempToken;
+    try {
+      tempToken = generateTempToken(hospital._id);
+    } catch (e) {
+      throw new Error(`GENERATE_TOKEN_ERROR: ${e.message}`);
+    }
+
+    try {
+      await AuditLog.create({
+        userId: hospital._id,
+        action: "LOGIN_ATTEMPT",
+        status: "SUCCESS",
+        ipAddress,
+        userAgent,
+        details: { step: "PASSWORD_VERIFIED" },
+      });
+    } catch (e) {
+      console.error("AuditLog success error:", e);
+    }
 
     return res.status(200).json({
       success: true,
@@ -102,12 +257,10 @@ export const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[Auth Controller] LOGIN ERROR:", error);
-    console.error("[Auth Controller] Error message:", error.message);
-    console.error("[Auth Controller] Error stack:", error.stack);
     return res.status(500).json({
       success: false,
       message: `Login failed: ${error.message}`,
+      stack: error.stack,
     });
   }
 };
@@ -160,12 +313,38 @@ export const verifyOtp = async (req, res) => {
     // Get hospital data
     const hospital = await Hospital.findById(hospitalId);
 
+    await AuditLog.create({
+      userId: hospitalId,
+      action: "LOGIN_SUCCESS",
+      status: "SUCCESS",
+      ipAddress,
+      userAgent,
+      details: { method: "OTP" },
+    });
+
+    // Set cookies
+    const isProduction = process.env.NODE_ENV === "production";
+
+    res.cookie("accessToken", session.accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie("refreshToken", session.refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     return res.status(200).json({
       success: true,
       message: "OTP verified successfully",
       data: {
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
+        // accessToken: session.accessToken, // Removed, sent in cookie
+        // refreshToken: session.refreshToken, // Removed, sent in cookie
         tokenType: session.tokenType,
         expiresIn: session.expiresIn,
         hospital: hospital.toJSON(),
@@ -186,7 +365,7 @@ export const verifyOtp = async (req, res) => {
  */
 export const refreshToken = async (req, res) => {
   try {
-    const { refreshToken: token } = req.body;
+    const token = req.cookies.refreshToken || req.body.refreshToken;
 
     if (!token) {
       return res.status(400).json({
@@ -197,10 +376,26 @@ export const refreshToken = async (req, res) => {
 
     const tokens = await refreshAccessToken(token);
 
+    // Get hospital data to send back
+    const session = await Session.findOne({ refreshToken: token });
+    const hospital = await Hospital.findById(session.hospitalId);
+
+    // Set new access token cookie
+    const isProduction = process.env.NODE_ENV === "production";
+    res.cookie("accessToken", tokens.accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
     return res.status(200).json({
       success: true,
       message: "Token refreshed successfully",
-      data: tokens,
+      data: {
+        ...tokens,
+        hospital: hospital ? hospital.toJSON() : null,
+      },
     });
   } catch (error) {
     console.error("Token refresh error:", error);
@@ -217,16 +412,24 @@ export const refreshToken = async (req, res) => {
  */
 export const logout = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const token = req.cookies.refreshToken || req.body.refreshToken;
 
-    if (!refreshToken) {
+    if (!token) {
       return res.status(400).json({
         success: false,
         message: "Refresh token is required",
       });
     }
 
-    await invalidateSession(refreshToken);
+    await invalidateSession(token);
+
+    // Clear cookies
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    // Log logout
+    // We might not have user ID here easily unless we decode token, but session invalidation handles it.
+    // Ideally we should log who logged out.
 
     return res.status(200).json({
       success: true,
@@ -290,6 +493,7 @@ export const resendOtp = async (req, res) => {
 };
 
 export default {
+  registerHospital,
   login,
   verifyOtp,
   refreshToken,

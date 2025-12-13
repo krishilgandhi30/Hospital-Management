@@ -39,6 +39,13 @@ const hospitalSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockUntil: {
+      type: Date,
+    },
     department: {
       type: String,
       default: "General",

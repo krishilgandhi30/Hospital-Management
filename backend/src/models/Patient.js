@@ -66,7 +66,19 @@ const patientSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
-    folders: [folderSchema],
+    folders: {
+      type: [folderSchema],
+      default: () => [
+        { name: "id" },
+        { name: "claim paper" },
+        { name: "hospital bills" },
+        { name: "discharge summary" },
+        { name: "hospital documents" },
+        { name: "reports" },
+        { name: "medical prescription & bills" },
+        { name: "consent" },
+      ],
+    },
     notes: {
       type: String,
     },

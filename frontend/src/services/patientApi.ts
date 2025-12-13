@@ -34,10 +34,10 @@ export interface File {
 /**
  * Get all patients for logged-in hospital
  */
-export const fetchPatients = async (limit = 20, skip = 0) => {
+export const fetchPatients = async (limit = 20, skip = 0, search = "") => {
   try {
     const response = await api.get("/patients", {
-      params: { limit, skip },
+      params: { limit, skip, search },
     });
     return response.data;
   } catch (error: any) {

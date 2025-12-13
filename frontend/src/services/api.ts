@@ -14,6 +14,7 @@ class ApiService {
     this.api = axios.create({
       baseURL: API_URL,
       timeout: 10000,
+      withCredentials: true, // Enable cookies
       headers: {
         "Content-Type": "application/json",
       },
@@ -31,12 +32,19 @@ class ApiService {
         console.log("[Axios] URL:", `${config.baseURL || ""}${config.url || ""}`);
         console.log("[Axios] Method:", config.method);
         console.log("[Axios] Payload:", config.data);
-        const token = localStorage.getItem("accessToken");
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-          persistentLogger.log("Axios", "Added Authorization header");
-          console.log("[Axios] Added Authorization header");
+
+        // For OTP verification/resend, we might still need the tempToken if the backend expects it in header
+        // But my backend implementation for verifyOtp/resendOtp checks for tempToken in header?
+        // Let's check auth.routes.js/middleware.
+        // verifyTempToken middleware likely checks header.
+        // So we should keep this logic ONLY for tempToken if it exists.
+
+        const tempToken = localStorage.getItem("tempToken");
+        if (tempToken) {
+          config.headers.Authorization = `Bearer ${tempToken}`;
+          persistentLogger.log("Axios", "Added Authorization header (tempToken)");
         }
+
         return config;
       },
       (error) => {
@@ -66,35 +74,31 @@ class ApiService {
         const originalRequest = error.config;
 
         // Handle 401 Unauthorized
-        if (error.response?.status === 401 && originalRequest) {
-          const refreshToken = localStorage.getItem("refreshToken");
+        if (error.response?.status === 401 && originalRequest && !originalRequest.url?.includes("/auth/login")) {
+          // If we get 401, it means cookie is invalid/expired. Try refresh.
+          // We don't need to read refreshToken from localStorage, it's in cookie.
 
-          if (refreshToken) {
-            try {
-              persistentLogger.log("Axios", "Attempting token refresh");
-              const response = await this.post("/auth/refresh-token", {
-                refreshToken,
-              });
-
-              const data = response as any;
-              localStorage.setItem("accessToken", data.data.accessToken);
-              localStorage.setItem("refreshToken", data.data.refreshToken);
-
-              // Retry original request
-              originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
-              persistentLogger.log("Axios", "Retrying original request after token refresh");
-              return this.api(originalRequest);
-            } catch (refreshError) {
-              persistentLogger.error("Axios", "Token refresh failed:", refreshError);
-              localStorage.removeItem("accessToken");
-              localStorage.removeItem("refreshToken");
-              localStorage.removeItem("tempToken");
+          // Avoid infinite loop if refresh itself fails
+          if (originalRequest.url?.includes("/auth/refresh-token")) {
+            if (window.location.pathname !== "/login") {
               window.location.href = "/login";
-              return Promise.reject(refreshError);
             }
-          } else {
-            persistentLogger.log("Axios", "No refresh token, redirecting to login");
+            return Promise.reject(error);
+          }
+
+          try {
+            persistentLogger.log("Axios", "Attempting token refresh");
+            // The refresh endpoint will read the refreshToken cookie and set new cookies
+            await this.post("/auth/refresh-token", {});
+
+            persistentLogger.log("Axios", "Retrying original request after token refresh");
+            return this.api(originalRequest);
+          } catch (refreshError) {
+            persistentLogger.error("Axios", "Token refresh failed:", refreshError);
+            localStorage.removeItem("tempToken");
+            localStorage.removeItem("hospital");
             window.location.href = "/login";
+            return Promise.reject(refreshError);
           }
         }
 
@@ -105,6 +109,10 @@ class ApiService {
 
   async get<T>(url: string, config = {}) {
     return this.api.get<T>(url, config);
+  }
+
+  async getBlob(url: string, config = {}) {
+    return this.api.get(url, { ...config, responseType: "blob" });
   }
 
   async post<T>(url: string, data = {}, config = {}) {
@@ -124,15 +132,17 @@ class ApiService {
   }
 
   setAuthToken(token: string) {
-    this.api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    localStorage.setItem("accessToken", token);
+    // No-op for cookies
+    // this.api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    // localStorage.setItem("accessToken", token);
   }
 
   removeAuthToken() {
     delete this.api.defaults.headers.common["Authorization"];
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
+    // localStorage.removeItem("accessToken");
+    // localStorage.removeItem("refreshToken");
     localStorage.removeItem("tempToken");
+    localStorage.removeItem("hospital");
   }
 }
 

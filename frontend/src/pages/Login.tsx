@@ -43,6 +43,14 @@ export const Login: React.FC = () => {
     }
   }, [state.error]);
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (state.isAuthenticated) {
+      console.log("[Login] User already authenticated, redirecting to dashboard");
+      navigate("/dashboard", { replace: true });
+    }
+  }, [state.isAuthenticated, navigate]);
+
   // Add window-level error logging
   React.useEffect(() => {
     const handleError = (event: ErrorEvent) => {
@@ -117,7 +125,15 @@ export const Login: React.FC = () => {
       console.error("[Login] Login error:", error);
       console.error("[Login] Error message:", error.message);
       console.error("[Login] Error details:", error);
-      // Error is already set in state by useAuth hook
+
+      if (error.response?.status === 423) {
+        const lockUntil = new Date(error.response.data.lockUntil);
+        const timeStr = lockUntil.toLocaleTimeString();
+        setDisplayError(`Account locked until ${timeStr}. Please try again later.`);
+      } else {
+        // Error is already set in state by useAuth hook, but we can set it here too for immediate feedback
+        setDisplayError(error.message || "Login failed");
+      }
     }
   };
 
@@ -184,6 +200,15 @@ export const Login: React.FC = () => {
             <code className="bg-gray-100 px-2 py-1 rounded">admin@citymedical.com</code>
             <br />
             <code className="bg-gray-100 px-2 py-1 rounded">Password123</code>
+          </p>
+        </div>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
+            Don't have an account?{" "}
+            <button type="button" onClick={() => navigate("/register")} className="text-blue-600 hover:text-blue-700 font-medium focus:outline-none focus:underline">
+              Register Hospital
+            </button>
           </p>
         </div>
       </div>

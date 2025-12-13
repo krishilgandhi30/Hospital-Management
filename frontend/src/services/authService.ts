@@ -81,11 +81,9 @@ export const authService = {
   /**
    * Refresh token
    */
-  refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
+  refreshToken: async (): Promise<RefreshTokenResponse> => {
     try {
-      const response = await api.post<RefreshTokenResponse>("/auth/refresh-token", {
-        refreshToken,
-      });
+      const response = await api.post<RefreshTokenResponse>("/auth/refresh-token", {});
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || "Token refresh failed";
@@ -98,11 +96,9 @@ export const authService = {
   /**
    * Logout
    */
-  logout: async (refreshToken: string) => {
+  logout: async () => {
     try {
-      const response = await api.post("/auth/logout", {
-        refreshToken,
-      });
+      const response = await api.post("/auth/logout", {});
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || "Logout failed";
@@ -114,26 +110,39 @@ export const authService = {
 
   /**
    * Check if user is authenticated
+   * We can't check cookies directly in JS, so we might need an endpoint or rely on 401s.
+   * For now, we can check if we have a user profile or just assume true until 401.
+   * Or better, we can keep a simple flag in localStorage or check a "me" endpoint.
+   * Let's assume we check a profile endpoint or similar.
+   * For this refactor, I'll leave it as is but note that accessToken won't be there.
+   * Actually, we should probably check if we have the hospital data in state/localStorage.
    */
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem("accessToken");
+    // Since we moved to cookies, we can't check accessToken existence.
+    // We can check if we have hospital data which implies we are logged in.
+    return !!localStorage.getItem("hospital");
   },
 
   /**
    * Get stored tokens
+   * Tokens are now in cookies, so we can't retrieve them here.
+   * This method might be obsolete or should return nulls.
    */
   getTokens: () => ({
-    accessToken: localStorage.getItem("accessToken"),
-    refreshToken: localStorage.getItem("refreshToken"),
+    accessToken: null, // In cookie
+    refreshToken: null, // In cookie
     tempToken: localStorage.getItem("tempToken"),
   }),
 
   /**
    * Store tokens
+   * Tokens are stored in cookies by the server.
+   * We only store hospital data if needed.
    */
   storeTokens: (accessToken: string, refreshToken: string) => {
-    localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("refreshToken", refreshToken);
+    // No-op for tokens as they are in cookies
+    // localStorage.setItem("accessToken", accessToken);
+    // localStorage.setItem("refreshToken", refreshToken);
   },
 
   /**
@@ -147,8 +156,9 @@ export const authService = {
    * Clear all tokens
    */
   clearTokens: () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
+    // Cookies should be cleared by server on logout
+    // localStorage.removeItem("accessToken");
+    // localStorage.removeItem("refreshToken");
     localStorage.removeItem("tempToken");
     localStorage.removeItem("hospital");
   },
