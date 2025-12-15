@@ -10,7 +10,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    private const val BASE_URL = "http://10.0.2.2:5000" // Emulator localhost
+    private const val BASE_URL = "https://hospital-management-ku71.onrender.com"
 
     private var retrofit: Retrofit? = null
 
