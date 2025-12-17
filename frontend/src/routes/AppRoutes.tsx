@@ -8,7 +8,9 @@ import HospitalRegistration from "../pages/HospitalRegistration";
 import HospitalsList from "../pages/HospitalsList";
 import LandingPage from "../pages/LandingPage";
 import Login from "../pages/Login";
-import OtpVerification from "../pages/OtpVerification";
+import SecuritySettings from "../pages/SecuritySettings";
+import TotpSetupMandatory from "../pages/TotpSetupMandatory";
+import TotpVerification from "../pages/TotpVerification";
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -16,25 +18,26 @@ export const AppRoutes: React.FC = () => {
       {/* Public Routes */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/verify-otp" element={<OtpVerification />} />
+      <Route path="/register" element={<HospitalRegistration />} />
+
+      {/* TOTP Verification (for users with 2FA enabled) */}
+      <Route path="/verify-totp" element={<TotpVerification />} />
+
+      {/* Legacy SMS OTP Verification - redirects to TOTP */}
+      <Route path="/verify-otp" element={<TotpVerification />} />
+
+      {/* Mandatory TOTP Setup (after registration) */}
+      <Route path="/setup-2fa" element={<TotpSetupMandatory />} />
 
       {/* Admin Only Routes */}
-      <Route
-        path="/register"
-        element={
-          <AdminRoute>
-            <HospitalRegistration />
-          </AdminRoute>
-        }
-      />
-      <Route
+      {/* <Route
         path="/hospitals"
         element={
           <AdminRoute>
             <HospitalsList />
           </AdminRoute>
         }
-      />
+      /> */}
 
       {/* Protected Routes */}
       <Route
@@ -45,6 +48,7 @@ export const AppRoutes: React.FC = () => {
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/security" element={<SecuritySettings />} />
 
         {/* Add other protected routes here */}
       </Route>
@@ -55,3 +59,4 @@ export const AppRoutes: React.FC = () => {
   );
 };
 export default AppRoutes;
+

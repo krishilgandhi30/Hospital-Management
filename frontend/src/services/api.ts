@@ -50,9 +50,11 @@ class ApiService {
           console.log("[Axios] Using Temp Token for request");
         }
 
-        if (token) {
+        if (token && !config.headers.Authorization) {
           config.headers.Authorization = `Bearer ${token}`;
           // console.log("[Axios] Added Authorization header:", token.substring(0, 10) + "...");
+        } else if (config.headers.Authorization) {
+          console.log("[Axios] Using existing Authorization header");
         } else {
           console.warn("[Axios] No token found in localStorage (accessToken or tempToken)");
         }
